@@ -7,6 +7,7 @@ var ctx;
 var MouseX = 0;
 var MouseY = 0;
 var MouseEndedDown = 0;
+var ShiftEndedDown = 0;
 
 function logKey(e)
 {
@@ -30,20 +31,6 @@ function hexcolor(r, g, b, a) {
 }
 
 function imageLoad(Offset) {
-
-    img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = "Cards\\clubs.bmp";
-    img.loading = "eager";
-
-    TempCanvas.width = img.width;
-    TempCanvas.height = img.height;
-
-    img.onload = function() {
-	TempCtx.drawImage(img, 0, 0);
-	img.style.display = "none";
-	copyTopImageToOffset(Offset);
-    };
 
 } // imageLoad()
 
@@ -220,11 +207,36 @@ function Loaded()
 		const dt = (timestamp - prev)*0.001;
 		prev = timestamp;
 		wasm.GameUpdateAndRender(StoreSize, StoreSize, canvas.width, canvas.height,
-					 dt, MouseX, MouseY, MouseEndedDown, First);
+					 dt, MouseX, MouseY, MouseEndedDown, ShiftEndedDown, First);
 		First = 1;
 		window.requestAnimationFrame(frame);
 	    }
 	    window.requestAnimationFrame(first);
+	    document.addEventListener('keydown', (e) => {
+		console.log(e);
+		switch(e.key){
+		case("Shift"):		
+		    {
+			ShiftEndedDown = 1;
+		    } break; 
+		default:
+		    {
+		    }break;
+		}
+	    });
+	    document.addEventListener('keyup', (e) => {
+		console.log(e);
+		switch(e.key){
+		case("Shift"):		
+		    {
+			ShiftEndedDown = 0;
+		    } break;
+		default:
+		    {
+		    }break;
+		}
+	    });
+
 	    document.addEventListener('mousemove', logKey);
 	    document.addEventListener('mouseup', (e) => {
 		switch (e.button) {
