@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", Loaded, false);
 
-
 var canvas;
 var ctx;
 
@@ -9,13 +8,15 @@ var MouseY = 0;
 var MouseEndedDown = 0;
 var ShiftEndedDown = 0;
 
+var heap;
+
 function logKey(e)
 {
     let Rect = canvas.getBoundingClientRect();
     MouseX = e.clientX - Rect.left;
     MouseY = e.clientY - Rect.top;
-    console.log(e);
-    console.log("My mouse ", MouseX, MouseY);
+    //console.log(e);
+    //console.log("My mouse ", MouseX, MouseY);
 }
 
 function clamp(low, high, value) {
@@ -30,18 +31,22 @@ function hexcolor(r, g, b, a) {
     return '#'+r+g+b+a;
 }
 
-function imageLoad(Offset) {
+var BitmapIndex;
 
-} // imageLoad()
-
-function copyTopImageToOffset(Offset)
+function CopyImageToOffset(Offset, Image)
 {
-    imageData = TempCtx.getImageData(0, 0, TempCanvas.width, TempCanvas.height, "srgb");
-    count = TempCanvas.width * TempCanvas.height * 4;
+    let canvas = document.getElementById("app");
+    let ctx = canvas.getContext("2d");
+    ctx.drawImage(Image, 0, 0);
+    const imageData = ctx.getImageData(0, 0, Image.width, Image.height, "srgb");
+    const count = Image.width * Image.height * 4;
 
     for (var i = 0; i < count; i++) {
 	heap[Offset + i] = imageData.data[i];
     }
+    console.log("BitmapIndex:");
+    console.log(BitmapIndex);
+    BitmapIndex += (Image.width * Image.height * 4);
 }
 
 function GetString(Memory, Offset, Length) 
@@ -63,22 +68,14 @@ function LoadImage(Filename) {
 	image.src = Filename;			
 	image.loading = "eager";
 	
-	image.onload = () => resolve(image);
-	
+	image.onload = () => {resolve(image);
+			      console.log(image);
+	CopyImageToOffset(BitmapIndex, image);
+			     }
 	const msg = `Could not load image at ${Filename};`
 	image.onerror = () => reject(new Error(msg));
     })
 }
-
-const ImgArr = [];
-ImgArr.push(
-    LoadImage("Cards\\Clubs.bmp"),               
-    LoadImage("Cards\\Hearts.bmp"),    
-    LoadImage("Cards\\Diamond.bmp"),            
-    LoadImage("Cards\\Spades.bmp"),     
-    LoadImage("Cards\\Back.bmp"),
-    LoadImage("Cards\\Foun.bmp"),
-);
 
 function Loaded()
 {
@@ -95,7 +92,7 @@ function Loaded()
     FrameBufferBytes = canvas.width * canvas.height * 4;
     console.log(FrameBufferBytes);
 
-    let memory = new WebAssembly.Memory({ initial: 1000, maximum: 1000 });
+    let memory = new WebAssembly.Memory({ initial: 800, maximum: 800 });
     heap = new Uint8Array(memory.buffer);
     console.log(heap);
     heap32 = new Uint32Array(memory.buffer);
@@ -103,6 +100,18 @@ function Loaded()
 
     MemorySizeInBytes = heap.length;
     console.log(MemorySizeInBytes);
+
+    BitmapIndex = (MemorySizeInBytes / 2) + FrameBufferBytes;
+
+    const ImgArr = [];
+    ImgArr.push(
+	LoadImage("Cards\\Clubs.bmp"),               
+	LoadImage("Cards\\Hearts.bmp"),    
+	LoadImage("Cards\\Diamond.bmp"),            
+	LoadImage("Cards\\Spades.bmp"),     
+	LoadImage("Cards\\Back.bmp"),
+	LoadImage("Cards\\Foun.bmp"),
+    );
 
     var imports = {
 	env: {
@@ -115,54 +124,10 @@ function Loaded()
 	    JS_PrintString: function(FilenamePtr, FilenameLength) {
 		console.log(GetString(memory, FilenamePtr, FilenameLength));
 	    },
-	    JS_DrawCard: function(X, Y, OffsetX, OffsetY, Suit) {
-		Promise.all(ImgArr).then((Images) => {
-		    //ctx.drawImage(Images[0], 0, 0, 88, 124, X, Y, 88, 124);
-		    ctx.drawImage(Images[Suit], OffsetX, OffsetY, 88, 124,
- X, Y, 88, 124);
-		});
-	    },
-	    "JS_LoadBMP": function(FilenamePtr, FilenameLength) {
-		console.log("LoadBMP called");
-		img = new Image();
-		img.crossOrigin = 'anonymous';
-		let string = GetString(memory, FilenamePtr, FilenameLength);
-		console.log("LoadBMP", string);				
-		img.src = string;			
-		img.loading = "eager";
-
-		img.onload = function() {
-		    ctx.drawImage(img, 0, 0);
-		};
-	    },
 	    RandomChoice: function(series, Range) {
 		min = Math.ceil(0);
 		max = Math.floor(Range);
 		return Math.floor(Math.random() * (max - min + 1) + min); },
-	    JS_DrawRectangle: function(MinX, MinY, MaxX, MaxY, R, G, B)
-	    {
-		MiX = Math.round(MinX);
-		MiY = Math.round(MinY);
-		MaX = Math.round(MaxX);
-		MaY = Math.round(MaxY);
-
-		if(MiX < 0) {
-		    MiX = 0;
-		}
-		if(MiY < 0) {
-		    MiY = 0;
-		}
-		if(MaX > canvas.width) {
-		    MaX = canvas.width;
-		}
-		if(MaY > canvas.height) {
-		    MaY = canvas.height;
-		}
-
-		ctx.fillStyle = hexcolor(R, G, B, 1);
-		ctx.fillRect(MiX, MiY, MaX - MiX, MaY - MiY);
-	    },
-	    
 	}
     };
 
@@ -177,7 +142,7 @@ function Loaded()
 	var wasmModule = new WebAssembly.Module(wasmSource);
 	var wasmInstance = new WebAssembly.Instance(wasmModule, imports);
 	wasm = wasmInstance.exports;
-
+	console.log(wasm);
 	let StoreSize = MemorySizeInBytes / 2;
 	//wasm.InitGameMemory(StoreSize, StoreSize);
 
@@ -206,36 +171,17 @@ function Loaded()
 	    function frame(timestamp) {
 		const dt = (timestamp - prev)*0.001;
 		prev = timestamp;
+
 		wasm.GameUpdateAndRender(StoreSize, StoreSize, canvas.width, canvas.height,
 					 dt, MouseX, MouseY, MouseEndedDown, ShiftEndedDown, First);
+		
+		Image = new ImageData(new Uint8ClampedArray(memory.buffer, StoreSize, FrameBufferBytes), canvas.width);
+//		console.log(Image);
+		ctx.putImageData(Image, 0, 0);		
 		First = 1;
 		window.requestAnimationFrame(frame);
 	    }
 	    window.requestAnimationFrame(first);
-	    document.addEventListener('keydown', (e) => {
-		console.log(e);
-		switch(e.key){
-		case("Shift"):		
-		    {
-			ShiftEndedDown = 1;
-		    } break; 
-		default:
-		    {
-		    }break;
-		}
-	    });
-	    document.addEventListener('keyup', (e) => {
-		console.log(e);
-		switch(e.key){
-		case("Shift"):		
-		    {
-			ShiftEndedDown = 0;
-		    } break;
-		default:
-		    {
-		    }break;
-		}
-	    });
 
 	    document.addEventListener('mousemove', logKey);
 	    document.addEventListener('mouseup', (e) => {
@@ -269,47 +215,35 @@ function Loaded()
 		default:
 		    console.log("Unknown button code:", e.button);
 		}
-	    });	    
+	    });	
+
+	    document.addEventListener('keydown', (e) => {
+		console.log(e);
+		switch(e.key){
+		case("Shift"):		
+		    {
+			ShiftEndedDown = 1;
+		    } break; 
+		default:
+		    {
+		    }break;
+		}
+	    });
+	    document.addEventListener('keyup', (e) => {
+		console.log(e);
+		switch(e.key){
+		case("Shift"):		
+		    {
+			ShiftEndedDown = 0;
+		    } break;
+		default:
+		    {
+		    }break;
+		}
+	    });
+    
 	});
     }; // XMLHttpRequest.onload()
 }
 
 
-function copyTopImageToHeap() {
-    imageData = TempCtx.getImageData(0, 0, TempCanvas.width, TempCanvas.height, "srgb");
-    count = canvas.width * canvas.height * 4;
-
-    for (var i = 0; i < count; i++) {
-	heap[i] = imageData.data[i];
-    }
-
-}
-
-function copyHeapToBottomImage() {
-//NOTE stupid javascript has no scope
-    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height, "srgb");
-    count = canvas.width * canvas.height * 4;
-    for (var i = 0; i < count; i++) {
-	imageData.data[i] = heap[i];
-    }
-    
-    ctx.putImageData(imageData, 0, 0);
-}
-
-
-function wasmLoadDone() {
-    imageLoad();
-}
-
-function Update()
-{
-    //copyTopImageToHeap();
-    wasm.GameUpdateAndRender();
-    copyHeapToBottomImage();
-
-    setTimeout(Update, 1000);
-}
-
-function imageLoadDone() {
-    copyTopImageToHeap();
-}
